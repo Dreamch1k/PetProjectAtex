@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="ru">
+	<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>АТЕКСЦЕНТР / Сервис — личный прототип</title>
+	<link rel="icon" type="image/svg+xml" href="assets/flame.svg" />
+	<link rel="stylesheet" href="styles.css" />
+
+	<div id="welcome">
+		<div class="welcome-shell">
+			<div class="welcome-copy">
+				<a class="logo-link" href="https://atexcenter.ru/" target="_blank" rel="noopener noreferrer" aria-label="АТЕКСЦЕНТР — открыть сайт в новой вкладке" title="Открыть сайт АТЕКСЦЕНТР">
+					<img src="assets/logo-light.svg" alt="АТЕКСЦЕНТР" width="200" height="24" />
+				</a>
+				<p class="eyebrow">Личный кабинет инженера</p>
+				<h1>Всё для сервиса.<br />В одном месте.</h1>
+				<p>
+					Планируйте выезды, следите за сроками обслуживания и сохраняйте историю
+					оборудования.
+				</p>
+				<div class="service-animation" aria-hidden="true">
+					<img src="assets/flame.svg" alt="" />
+				</div>
+			</div>
+			<div class="login-card">
+				<span class="demo-tag">ДЕМОНСТРАЦИОННЫЙ ВХОД</span>
+				<h2>Добро пожаловать</h2>
+				<p class="login-help">Войдите в своё рабочее пространство.</p>
+				<form id="loginForm">
+					<label
+						>Логин<input
+							id="loginName"
+							name="username"
+							autocomplete="username"
+							required
+							placeholder="Введите логин" /></label
+					><label
+						>Пароль<input
+							id="loginPassword"
+							name="password"
+							type="password"
+							autocomplete="current-password"
+							required
+							placeholder="Введите пароль"
+					/></label>
+					<p id="loginError" class="login-error" role="alert"></p>
+					<button type="submit">Войти в личный кабинет →</button>
+				</form>
+				<p class="login-help">Для проверки: логин <b>тест</b>, пароль <b>тест</b>.</p>
+				<p class="login-help">
+					Это демонстрационный экран, а не защищённая авторизация. Данные остаются в этом
+					браузере; отдельные пользователи и шифрование пока не предусмотрены.
+				</p>
+			</div>
+		</div>
+	</div>
+	<header>
+		<div class="header-inner">
+			<div class="brand">
+				<a class="logo-link" href="https://atexcenter.ru/" target="_blank" rel="noopener noreferrer" aria-label="АТЕКСЦЕНТР — открыть сайт в новой вкладке" title="Открыть сайт АТЕКСЦЕНТР">
+					<img src="assets/logo-light.svg" alt="АТЕКСЦЕНТР" width="200" height="24" />
+				</a>
+				<small>СЕРВИСНОЕ ОБСЛУЖИВАНИЕ</small>
+			</div>
+			<div class="account-actions">
+				<span>Личный кабинет · тест</span><button id="logout" type="button">Выйти</button>
+			</div>
+		</div>
+	</header>
+	<main>
+		<div class="intro">
+			<div>
+				<p class="eyebrow">Рабочее пространство инженера</p>
+				<h1>Сервис под контролем</h1>
+				<p>Объекты, оборудование и сроки обслуживания — в одном месте.</p>
+			</div>
+			<div class="intro-mark">Личный журнал<br />Работает без подключения к интернету</div>
+		</div>
+		<div id="message" class="hidden" role="status"></div>
+		<nav id="nav" aria-label="Разделы программы"></nav>
+		<div id="view"></div>
+		<footer class="footer">
+			<span>Личный прототип в стилистике АТЕКСЦЕНТР. Не официальный продукт компании.</span
+			><span>Данные в браузере · Не забывайте резервные копии</span>
+		</footer>
+	</main>
+	<script>
+		"use strict";
+		function setupTheme() {
+			let theme = "light";
+			try {
+				const saved = localStorage.getItem("service-theme");
+				theme = ["light", "dark"].includes(saved)
+					? saved
+					: window.matchMedia("(prefers-color-scheme: dark)").matches
+						? "dark"
+						: "light";
+			} catch {}
+			const button = document.createElement("button");
+			button.type = "button";
+			button.className = "theme-toggle";
+			button.innerHTML = `
+				<svg class="theme-icon sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+					<circle cx="12" cy="12" r="4" />
+					<path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.4 1.4m11.2 11.2L19 19M5 19l1.4-1.4M17.6 6.4 19 5" />
+				</svg>
+				<svg class="theme-icon moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+					<path d="M20.5 14.4A8.8 8.8 0 0 1 9.6 3.5a8.8 8.8 0 1 0 10.9 10.9Z" />
+				</svg>
+			`;
+			function paint() {
+				document.documentElement.dataset.theme = theme;
+				button.setAttribute("aria-label", "Тёмная тема");
+				button.setAttribute("aria-pressed", String(theme === "dark"));
+				button.title = theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему";
+			}
+			button.onclick = () => {
+				theme = theme === "dark" ? "light" : "dark";
+				paint();
+				try {
+					localStorage.setItem("service-theme", theme);
+				} catch {
+					button.title += " · выбор не удалось сохранить";
+				}
+			};
+			document.body.append(button);
+			paint();
+		}
+		const KEY = "service-journal-v1";
+		function acceptsCredentials(username, password) {
+			return username.trim() === "тест" && password === "тест";
+		}
+		function setupLogin() {
+			const form = document.getElementById("loginForm");
+			form.addEventListener("submit", (event) => {
+				event.preventDefault();
+				const error = document.getElementById("loginError");
+				if (
+					!acceptsCredentials(form.elements.username.value, form.elements.password.value)
+				) {
+					error.textContent =
+						"Неверный логин или пароль. Для демовхода используйте тест / тест.";
+					form.elements.password.focus();
+					return;
+				}
+				error.textContent = "";
+				form.elements.password.value = "";
+				document.body.classList.add("signed-in");
+				page = "dashboard";
+				render();
+				const heading = document.querySelector("main h1");
+				heading.tabIndex = -1;
+				heading.focus();
+				window.scrollTo(0, 0);
+			});
+			document.getElementById("logout").addEventListener("click", () => {
+				document.body.classList.remove("signed-in");
+				form.reset();
+				document.getElementById("loginError").textContent = "";
+				document.getElementById("loginName").focus();
+				window.scrollTo(0, 0);
+			});
+		}
+		const escapeHtml = (value) =>
+			String(value ?? "").replace(
+				/[&<>"']/g,
+				(char) =>
+					({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
+			);
+		const today = () => {
+			const date = new Date();
+			return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+		};
+		function addYears(value, years) {
+			const [year, month, day] = value.split("-").map(Number);
+			const last = new Date(year + years, month, 0).getDate();
+			return `${year + years}-${String(month).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
+		}
+		const validDate = (value) =>
+			typeof value === "string" &&
+			/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+			!isNaN(Date.parse(value)) &&
+			new Date(value + "T00:00:00Z").toISOString().slice(0, 10) === value;
+		const fmt = (value) => (value ? value.split("-").reverse().join(".") : "Не назначено");
+		const uid = () => crypto.randomUUID();
+		const demo = () => ({
+			version: 1,
+			objects: [
+				{
+					id: "demo",
+					name: "Демо — Москва",
+					city: "Москва",
+					notes: "Вымышленный объект. Даты приведены для демонстрации.",
+				},
+			],
+			equipment: [
+				{
+					id: "a1",
+					objectId: "demo",
+					name: "Баллон А1",
+					model: "",
+					serial: "",
+					place: "Демо-участок",
+					installed: "2025-10-01",
+					pressureYears: 1,
+					activatorYears: 3,
+				},
+				{
+					id: "a2",
+					objectId: "demo",
+					name: "Баллон А2",
+					model: "",
+					serial: "",
+					place: "Демо-участок",
+					installed: "2026-03-10",
+					pressureYears: 1,
+					activatorYears: 3,
+				},
+			],
+			history: [],
+			visits: [],
+		});
+		let data = demo(),
+			page = "dashboard",
+			storageAvailable = true;
+		function notify(text) {
+			const box = document.getElementById("message");
+			box.textContent = text;
+			box.classList.remove("hidden");
+		}
+		try {
+			const raw = localStorage.getItem(KEY);
+			if (raw) {
+				const parsed = JSON.parse(raw);
+				validate(parsed);
+				data = parsed;
+			}
+		} catch (error) {
+			storageAvailable = false;
+			notify(
+				"Не удалось прочитать сохранение. Показана демоверсия; запись отключена, чтобы не затереть данные. " +
+					error.message,
+			);
+		}
+		function save() {
+			if (!storageAvailable)
+				throw Error(
+					"Сохранение недоступно. Сначала восстановите корректную резервную копию.",
+				);
+			localStorage.setItem(KEY, JSON.stringify(data));
+		}
+		function change(callback) {
+			const previous = JSON.stringify(data);
+			try {
+				callback();
+				save();
+				render();
+				notify("Сохранено в этом браузере. Регулярно скачивайте резервную копию.");
+			} catch (error) {
+				data = JSON.parse(previous);
+				notify("Изменения не сохранены: " + error.message);
+			}
+		}
+		function validate(value) {
+			if (!value || value.version !== 1) throw Error("Неподдерживаемый формат.");
+			for (const key of ["objects", "equipment", "history", "visits"]) {
+				if (!Array.isArray(value[key]) || value[key].length > 10000)
+					throw Error("Некорректные списки.");
+				const ids = new Set();
+				for (const row of value[key]) {
+					if (!row || typeof row.id !== "string" || ids.has(row.id))
+						throw Error("Некорректные идентификаторы.");
+					ids.add(row.id);
+				}
+			}
+			const text = (row, key) => {
+				if (typeof row[key] !== "string" || row[key].length > 20000)
+					throw Error("Некорректное текстовое поле: " + key);
+			};
+			for (const row of value.objects) {
+				for (const key of ["name", "city", "notes"]) text(row, key);
+				if (!row.name.trim()) throw Error("Пустое название объекта.");
+			}
+			for (const row of value.equipment) {
+				for (const key of ["name", "model", "serial", "place"]) text(row, key);
+				if (
+					!row.name.trim() ||
+					!value.objects.some((obj) => obj.id === row.objectId) ||
+					!validDate(row.installed) ||
+					![row.pressureYears, row.activatorYears].every(
+						(num) => Number.isInteger(num) && num >= 1 && num <= 20,
+					)
+				)
+					throw Error("Некорректное оборудование.");
+			}
+			for (const row of value.history) {
+				for (const key of ["result", "remaining"]) text(row, key);
+				if (
+					!value.equipment.some((item) => item.id === row.equipmentId) ||
+					!["pressure", "activator"].includes(row.type) ||
+					!validDate(row.date) ||
+					row.date > today() ||
+					(row.next && (!validDate(row.next) || row.next <= row.date)) ||
+					(row.previous && !validDate(row.previous))
+				)
+					throw Error("Некорректная история.");
+				const equipment = value.equipment.find((item) => item.id === row.equipmentId);
+				if (row.date < equipment.installed) throw Error("Работа раньше установки.");
+			}
+			for (const row of value.visits) {
+				for (const key of ["purpose", "result"]) text(row, key);
+				if (
+					!value.objects.some((obj) => obj.id === row.objectId) ||
+					!validDate(row.date) ||
+					!["Планируется", "Согласован", "Выполнен", "Отменён"].includes(row.status)
+				)
+					throw Error("Некорректный выезд.");
+			}
+		}
+		const objectName = (id) => data.objects.find((obj) => obj.id === id)?.name || "—";
+		const equipmentName = (id) => data.equipment.find((item) => item.id === id)?.name || "—";
+		const latest = (id, type) =>
+			data.history
+				.filter((row) => row.equipmentId === id && row.type === type)
+				.sort((left, right) => right.date.localeCompare(left.date))[0];
+		function due(item, type) {
+			const last = latest(item.id, type);
+			if (type === "pressure")
+				return addYears(last ? last.date : item.installed, item.pressureYears);
+			return last ? last.next : addYears(item.installed, item.activatorYears);
+		}
+		function urgency(date) {
+			if (!date) return ["soon", "Нужно назначить"];
+			const days = Math.round((Date.parse(date) - Date.parse(today())) / 86400000);
+			return days < 0
+				? ["late", "Просрочено"]
+				: days <= 30
+					? ["soon", "В ближайшие 30 дней"]
+					: ["ok", "Позже"];
+		}
+		const taskName = (type) =>
+			type === "pressure" ? "Проверка давления" : "Замена активатора";
+		const tasks = () =>
+			data.equipment
+				.flatMap((item) =>
+					["pressure", "activator"].map((type) => ({
+						item,
+						type,
+						date: due(item, type),
+					})),
+				)
+				.sort((left, right) => (left.date || "").localeCompare(right.date || ""));
+		const table = (headers, rows) =>
+			`<div class="scroll"><table><thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.join("") : `<tr><td colspan="${headers.length}" class="muted">Пока нет записей</td></tr>`}</tbody></table></div>`;
+		const options = (items, name) =>
+			items
+				.map(
+					(item) =>
+						`<option value="${escapeHtml(item.id)}">${escapeHtml(name(item))}</option>`,
+				)
+				.join("");
+		const objectOptions = () => options(data.objects, (item) => item.name);
+		const equipmentOptions = () =>
+			options(data.equipment, (item) => objectName(item.objectId) + " / " + item.name);
+		const field = (title, name, type = "text", extra = "") =>
+			`<label>${title}<input name="${name}" type="${type}" ${extra}></label>`;
+		const notes = (title, name) =>
+			`<label>${title}<textarea name="${name}" maxlength="20000"></textarea></label>`;
+		const select = (title, name, choices) =>
+			`<label>${title}<select name="${name}" required>${choices}</select></label>`;
+		const sections = {
+			dashboard: "Обзор",
+			objects: "Объекты",
+			equipment: "Оборудование",
+			history: "Обслуживание",
+			visits: "Выезды",
+			backup: "Копии и инструкция",
+		};
+		function render() {
+			document.getElementById("nav").innerHTML = Object.entries(sections)
+				.map(
+					([key, label]) =>
+						`<button class="${page === key ? "active" : "secondary"}" data-page="${key}">${label}</button>`,
+				)
+				.join("");
+			let html = "";
+			if (page === "dashboard") {
+				const all = tasks();
+				html = `<div class="grid"><div class="card stat-card stat-objects"><img class="stat-art" src="assets/card-objects.png" alt="" width="96" height="96" /><span class="stat-label">Объектов</span><div class="metric">${data.objects.length}</div></div><div class="card stat-card stat-equipment"><img class="stat-art" src="assets/card-equipment.png" alt="" width="96" height="96" /><span class="stat-label">Оборудования</span><div class="metric">${data.equipment.length}</div></div><div class="card stat-card stat-overdue"><img class="stat-art" src="assets/card-overdue.png" alt="" width="96" height="96" /><span class="stat-label">Просроченных работ</span><div class="metric late">${all.filter((task) => task.date && task.date < today()).length}</div></div><div class="card stat-card stat-upcoming"><img class="stat-art" src="assets/card-upcoming.png" alt="" width="96" height="96" /><span class="stat-label">Ближайшие 30 дней</span><div class="metric">${all.filter((task) => task.date && urgency(task.date)[0] === "soon").length}</div></div></div><section><h2>Сроки обслуживания</h2><p class="muted">Все сроки, включая неназначенные. Планирование выезда не переносит срок ТО.</p>${table(
+					["Объект / оборудование", "Работа", "Следующий срок", "Состояние"],
+					all.map((task) => {
+						const status = urgency(task.date);
+						return `<tr><td>${escapeHtml(objectName(task.item.objectId))}<br>${escapeHtml(task.item.name)}</td><td>${taskName(task.type)}</td><td>${fmt(task.date)}</td><td class="${status[0]}">${status[1]}</td></tr>`;
+					}),
+				)}</section><section><h2>Открытые выезды</h2>${visitTable(data.visits.filter((row) => ["Планируется", "Согласован"].includes(row.status)).sort((left, right) => left.date.localeCompare(right.date)))}</section>`;
+			}
+			if (page === "objects")
+				html = `<section><h2>Добавить объект</h2><form id="objectsForm" class="grid">${field("Название *", "name", "text", 'required maxlength="200"')}${field("Город / адрес", "city", "text", 'maxlength="500"')}${notes("Примечания", "notes")}<button>Добавить объект</button></form></section><section><h2>Мои объекты</h2>${table(
+					["Название", "Город / адрес", "Примечания"],
+					data.objects.map(
+						(row) =>
+							`<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.city)}</td><td>${escapeHtml(row.notes)}</td></tr>`,
+					),
+				)}</section>`;
+			if (page === "equipment")
+				html = `<section><h2>Добавить оборудование</h2><p class="muted">Интервалы задаются пользователем по применимому регламенту. Значения 1 и 3 года — согласованные стартовые настройки, не подтверждение требований производителя.</p><form id="equipmentForm" class="grid">${select("Объект *", "objectId", objectOptions())}${field("Обозначение *", "name", "text", 'required maxlength="200"')}${field("Модель", "model")}${field("Серийный номер", "serial")}${field("Место установки", "place")}${field("Дата установки *", "installed", "date", 'required min="2000-01-01" max="2090-12-31"')}${field("Проверка давления, лет *", "pressureYears", "number", 'required min="1" max="20" step="1" value="1"')}${field("Первая замена активатора, лет *", "activatorYears", "number", 'required min="1" max="20" step="1" value="3"')}<button>Добавить оборудование</button></form></section><section><h2>Реестр оборудования</h2>${table(
+					[
+						"Объект",
+						"Обозначение / модель",
+						"Серийный № / место",
+						"Установка",
+						"Интервалы, лет",
+					],
+					data.equipment.map(
+						(row) =>
+							`<tr><td>${escapeHtml(objectName(row.objectId))}</td><td>${escapeHtml(row.name)}<br>${escapeHtml(row.model)}</td><td>${escapeHtml(row.serial)}<br>${escapeHtml(row.place)}</td><td>${fmt(row.installed)}</td><td>Давление: ${row.pressureYears}<br>Первая замена: ${row.activatorYears}</td></tr>`,
+					),
+				)}</section>`;
+			if (page === "history")
+				html = `<section><h2>Записать выполненную работу</h2><p class="warn">Записывайте только фактически выполненные работы. Для активатора следующий срок подтвердите вручную или оставьте пустым — появится напоминание «Нужно назначить».</p><form id="historyForm" class="grid">${select("Оборудование *", "equipmentId", equipmentOptions())}${select("Работа *", "type", '<option value="pressure">Проверка давления</option><option value="activator">Замена активатора</option>')}${field("Фактическая дата *", "date", "date", `required value="${today()}" max="${today()}"`)}<label id="nextLabel" class="hidden">Следующая замена активатора<input name="next" type="date"></label>${notes("Результат / замечания *", "result")}${notes("Что осталось сделать", "remaining")}<button>Подтвердить выполнение</button></form></section><section><h2>История работ</h2>${table(
+					[
+						"Оборудование",
+						"Работа",
+						"Факт",
+						"Предыдущий срок",
+						"Следующий срок на момент записи",
+						"Результат / осталось",
+					],
+					[...data.history]
+						.reverse()
+						.map(
+							(row) =>
+								`<tr><td>${escapeHtml(objectName(data.equipment.find((item) => item.id === row.equipmentId)?.objectId))}<br>${escapeHtml(equipmentName(row.equipmentId))}</td><td>${taskName(row.type)}</td><td>${fmt(row.date)}</td><td>${fmt(row.previous)}</td><td>${fmt(row.next)}</td><td>${escapeHtml(row.result)}<br>${escapeHtml(row.remaining)}</td></tr>`,
+						),
+				)}</section>`;
+			if (page === "visits")
+				html = `<section><h2>Запланировать выезд</h2><form id="visitsForm" class="grid">${select("Объект *", "objectId", objectOptions())}${field("Дата *", "date", "date", "required")}${field("Цель *", "purpose", "text", 'required maxlength="1000"')}<button>Добавить выезд</button></form></section><section><h2>Все выезды</h2><p class="muted">Изменение статуса выезда не отмечает оборудование обслуженным. Выполнение каждой работы внесите в разделе «Обслуживание».</p>${visitTable(data.visits)}</section>`;
+			if (page === "backup")
+				html = `<section><h2>Сохранность данных</h2><p class="warn">Данные хранятся в локальном хранилище браузера, не внутри HTML-файла. Очистка браузера, приватный режим, другой браузер или перенос файла могут сделать записи недоступными. Скачивайте копию после работы и перед обновлением программы.</p><button id="export">Скачать резервную копию</button><p><label>Восстановить из JSON-копии (заменит текущие записи)<input id="import" type="file" accept=".json,application/json"></label></p><button id="empty" class="secondary">Удалить все записи и начать с нуля</button></section><section><h2>Как пользоваться</h2><ol><li>Откройте раздел «Объекты» и добавьте объект.</li><li>В разделе «Оборудование» добавьте каждый баллон отдельно, укажите установку и интервалы.</li><li>Проверьте сроки в «Обзоре» и запланируйте выезд.</li><li>После работы внесите фактическое выполнение в «Обслуживание».</li><li>Проверка давления: следующий срок от фактической даты, до первой проверки — от установки.</li><li>Активатор: первая замена от установки; после замены следующий срок вводится вручную.</li><li>29 февраля плюс год переносится на 28 февраля, если следующий год невисокосный.</li><li>Скачайте резервную копию. Для удаления демоданных используйте кнопку выше: она удаляет ВСЕ записи.</li></ol><p>Это личный прототип 0.1, не официальная система RSBP и не подтверждение исправности оборудования. Нет фоновых уведомлений: проверяйте обзор при открытии. Не содержит паролей или шифрования. Реальные данные используйте только после согласования с компанией.</p><p>В этой версии нет редактирования и удаления отдельных записей: для экспериментов используйте демоданные и восстановление копии. Историю работ добавляйте последовательно. Программа работает без интернета и ничего не отправляет в сеть.</p></section>`;
+			document.getElementById("view").innerHTML = html;
+			bind();
+			installFilters();
+			prepareMobileTables();
+			const view = document.getElementById("view");
+			view.style.animation = "none";
+			void view.offsetWidth;
+			view.style.animation = "";
+		}
+		const filterStates = {};
+		function filterMatches(record, filters) {
+			const query = (filters.query || "").trim().toLocaleLowerCase("ru");
+			return Boolean(
+				(!query || record.text.toLocaleLowerCase("ru").includes(query)) &&
+					(!filters.object || record.object === filters.object) &&
+					(!filters.status || record.status === filters.status) &&
+					(!filters.from || (record.date && record.date >= filters.from)) &&
+					(!filters.to || (record.date && record.date <= filters.to)),
+			);
+		}
+		function prepareMobileTables() {
+			document.querySelectorAll("#view table").forEach((tableElement) => {
+				const headings = Array.from(tableElement.tHead.rows[0].cells);
+				headings.forEach((heading) => heading.setAttribute("scope", "col"));
+				Array.from(tableElement.tBodies[0].rows).forEach((row) => {
+					Array.from(row.cells).forEach((cell, index) => {
+						if (cell.colSpan > 1) return;
+						cell.dataset.label = headings[index].textContent;
+						const value = document.createElement("span");
+						value.className = "mobile-cell-value";
+						while (cell.firstChild) value.append(cell.firstChild);
+						cell.append(value);
+					});
+				});
+			});
+		}
+		function installFilters() {
+			const equipmentRecord = (row) => ({ object: row.objectId, date: row.installed });
+			const visitRecord = (row) => ({
+				object: row.objectId,
+				date: row.date,
+				status: row.status,
+			});
+			let groups = [];
+			if (page === "dashboard")
+				groups = [
+					{
+						records: tasks().map((task) => ({
+							object: task.item.objectId,
+							date: task.date,
+							status: urgency(task.date)[1],
+						})),
+						dateLabel: "Срок",
+					},
+					{
+						records: data.visits
+							.filter((row) => ["Планируется", "Согласован"].includes(row.status))
+							.sort((left, right) => left.date.localeCompare(right.date))
+							.map(visitRecord),
+						dateLabel: "Дата выезда",
+					},
+				];
+			if (page === "objects")
+				groups = [
+					{ records: data.objects.map((row) => ({ object: row.id })), dateLabel: "" },
+				];
+			if (page === "equipment")
+				groups = [{ records: data.equipment.map(equipmentRecord), dateLabel: "Установка" }];
+			if (page === "history")
+				groups = [
+					{
+						records: [...data.history]
+							.reverse()
+							.map((row) => ({
+								object: data.equipment.find((item) => item.id === row.equipmentId)
+									?.objectId,
+								date: row.date,
+								status: taskName(row.type),
+							})),
+						dateLabel: "Выполнено",
+					},
+				];
+			if (page === "visits")
+				groups = [{ records: data.visits.map(visitRecord), dateLabel: "Дата выезда" }];
+			document.querySelectorAll("#view table").forEach((tableElement, index) => {
+				const group = groups[index];
+				if (!group) return;
+				const key = page + "-" + index;
+				const state = filterStates[key] || (filterStates[key] = {});
+				const rows = Array.from(tableElement.tBodies[0].rows).slice(
+					0,
+					group.records.length,
+				);
+				group.records.forEach(
+					(record, rowIndex) => (record.text = rows[rowIndex].textContent),
+				);
+				const bar = document.createElement("div");
+				bar.className = "filter-bar";
+				const statuses = [
+					...new Set(group.records.map((record) => record.status).filter(Boolean)),
+				];
+				bar.innerHTML = `<label>Поиск по таблице<input data-filter="query" type="search" placeholder="Название, номер, работа…" aria-label="Поиск по таблице"></label><label>Объект<select data-filter="object"><option value="">Все объекты</option>${objectOptions()}</select></label>${statuses.length ? `<label>Статус / работа<select data-filter="status"><option value="">Все</option>${statuses.map((status) => `<option value="${escapeHtml(status)}">${escapeHtml(status)}</option>`).join("")}</select></label>` : ""}${group.dateLabel ? `<label>${group.dateLabel}: с<input data-filter="from" type="date"></label><label>По<input data-filter="to" type="date"></label>` : ""}<button type="button" class="secondary">Сбросить</button>`;
+				const counter = document.createElement("p");
+				counter.className = "filter-count";
+				counter.setAttribute("role", "status");
+				const empty = document.createElement("tr");
+				const cell = document.createElement("td");
+				cell.colSpan = tableElement.tHead.rows[0].cells.length;
+				cell.className = "filter-empty";
+				empty.append(cell);
+				tableElement.tBodies[0].append(empty);
+				const scroll = tableElement.parentElement;
+				scroll.before(bar, counter);
+				const controls = Array.from(bar.querySelectorAll("[data-filter]"));
+				controls.forEach((control) => {
+					control.value = state[control.dataset.filter] || "";
+					if (control.tagName === "SELECT" && !control.value)
+						state[control.dataset.filter] = "";
+				});
+				function apply() {
+					const invalid = state.from && state.to && state.from > state.to;
+					let count = 0;
+					rows.forEach((row, rowIndex) => {
+						const matches = !invalid && filterMatches(group.records[rowIndex], state);
+						row.hidden = !matches;
+						if (matches) count++;
+					});
+					if (!group.records.length) {
+						const original = tableElement.tBodies[0].rows[0];
+						if (original !== empty) original.hidden = true;
+					}
+					empty.hidden = count > 0;
+					cell.textContent = invalid
+						? "Дата «с» не должна быть позже даты «по»."
+						: group.records.length
+							? "Ничего не найдено. Измените фильтры или сбросьте их."
+							: "Пока нет записей";
+					counter.textContent = `Показано: ${count} из ${group.records.length}`;
+				}
+				controls.forEach((control) =>
+					control.addEventListener("input", () => {
+						state[control.dataset.filter] = control.value;
+						apply();
+					}),
+				);
+				bar.querySelector("button").onclick = () => {
+					controls.forEach((control) => {
+						control.value = "";
+						state[control.dataset.filter] = "";
+					});
+					apply();
+				};
+				apply();
+			});
+			if (page === "dashboard") {
+				const hint = document.createElement("p");
+				hint.className = "muted";
+				hint.textContent =
+					"Карточки сверху — общие итоги. Фильтры действуют только на свою таблицу; записи не изменяются.";
+				document.querySelector("#view .grid").after(hint);
+			}
+		}
+		function visitTable(rows) {
+			return table(
+				["Дата", "Объект", "Цель", "Статус", "Результат"],
+				rows.map(
+					(row) =>
+						`<tr><td>${fmt(row.date)}</td><td>${escapeHtml(objectName(row.objectId))}</td><td>${escapeHtml(row.purpose)}</td><td><button data-visit="${escapeHtml(row.id)}">${escapeHtml(row.status)} · изменить</button></td><td>${escapeHtml(row.result)}</td></tr>`,
+				),
+			);
+		}
+		function bind() {
+			document.querySelectorAll("[data-page]").forEach(
+				(button) =>
+					(button.onclick = () => {
+						page = button.dataset.page;
+						render();
+					}),
+			);
+			for (const key of ["objects", "equipment", "history", "visits"]) {
+				const form = document.getElementById(key + "Form");
+				if (!form) continue;
+				form.onsubmit = (event) => {
+					event.preventDefault();
+					const row = Object.fromEntries(new FormData(form));
+					for (const key in row) row[key] = row[key].trim();
+					row.id = uid();
+					change(() => {
+						if (key === "equipment") {
+							row.pressureYears = Number(row.pressureYears);
+							row.activatorYears = Number(row.activatorYears);
+						}
+						if (key === "history") {
+							const item = data.equipment.find((item) => item.id === row.equipmentId);
+							if (!item) throw Error("Добавьте оборудование.");
+							if (!row.result) throw Error("Укажите результат выполненной работы.");
+							const last = latest(item.id, row.type);
+							if (last && row.date <= last.date)
+								throw Error("Дата должна быть позже последней работы этого типа.");
+							row.previous = due(item, row.type) || "";
+							row.next =
+								row.type === "pressure"
+									? addYears(row.date, item.pressureYears)
+									: row.next;
+							if (row.next && row.next <= row.date)
+								throw Error("Следующий срок должен быть позже выполнения.");
+						}
+						if (key === "visits") {
+							row.status = "Планируется";
+							row.result = "";
+						}
+						data[key].push(row);
+						validate(data);
+					});
+				};
+			}
+			const historyForm = document.getElementById("historyForm");
+			if (historyForm)
+				historyForm.elements.type.onchange = () => {
+					document
+						.getElementById("nextLabel")
+						.classList.toggle(
+							"hidden",
+							historyForm.elements.type.value !== "activator",
+						);
+				};
+			document.querySelectorAll("[data-visit]").forEach(
+				(button) =>
+					(button.onclick = () => {
+						const row = data.visits.find((item) => item.id === button.dataset.visit);
+						const status = prompt(
+							"Статус: Планируется, Согласован, Выполнен или Отменён",
+							row.status,
+						);
+						if (status === null) return;
+						if (
+							!["Планируется", "Согласован", "Выполнен", "Отменён"].includes(
+								status.trim(),
+							)
+						)
+							return notify("Введите один из четырёх статусов без изменений.");
+						const result = prompt("Результат выезда / примечания", row.result);
+						if (result === null) return;
+						change(() => {
+							row.status = status.trim();
+							row.result = result;
+						});
+					}),
+			);
+			const exportButton = document.getElementById("export");
+			if (exportButton)
+				exportButton.onclick = () => {
+					const url = URL.createObjectURL(
+						new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+					);
+					const link = document.createElement("a");
+					link.href = url;
+					link.download = "service-backup-" + today() + ".json";
+					link.click();
+					setTimeout(() => URL.revokeObjectURL(url), 1000);
+				};
+			const input = document.getElementById("import");
+			if (input)
+				input.onchange = async () => {
+					try {
+						const file = input.files[0];
+						if (!file) return;
+						if (file.size > 10e6) throw Error("Файл больше 10 МБ.");
+						const parsed = JSON.parse(await file.text());
+						validate(parsed);
+						if (
+							!confirm(
+								"Заменить все текущие записи данными из копии? Сначала сохраните текущую копию.",
+							)
+						)
+							return;
+						localStorage.setItem(KEY, JSON.stringify(parsed));
+						data = parsed;
+						storageAvailable = true;
+						render();
+						notify("Копия восстановлена.");
+					} catch (error) {
+						notify("Не удалось восстановить копию: " + error.message);
+					}
+				};
+			const empty = document.getElementById("empty");
+			if (empty)
+				empty.onclick = () => {
+					if (
+						confirm(
+							"Удалить ВСЕ объекты, оборудование, историю и выезды? Перед этим скачайте копию.",
+						)
+					)
+						change(() => {
+							data = {
+								version: 1,
+								objects: [],
+								equipment: [],
+								history: [],
+								visits: [],
+							};
+						});
+				};
+		}
+		if (typeof window !== "undefined") {
+			setupTheme();
+			setupLogin();
+		}
+		render();
+	</script>
+</html>
